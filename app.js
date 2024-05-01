@@ -1,6 +1,5 @@
 const express = require("express");
 const cors = require("cors");
-const app = express();
 const bodyParser = require("body-parser");
 const sqlite3 = require("sqlite3").verbose();
 const PORT = process.env.PORT || 3001;
@@ -9,9 +8,9 @@ const products  = require('./products')
 const questions = require( './questions');
 
 
+const app = express();
 app.use(bodyParser.json());
 app.use(cors());
-
 const db = new sqlite3.Database("./database.db");
 
 
@@ -27,15 +26,13 @@ app.get('/quiz', (req, res) => {
 });
 
 app.get("/populate", (req, res) => {
+
   try {
     createProducts(products, res)
     createQuiz(questions, res)
   } catch (error) {
     console.log(error.message);
-  } finally {
-    db.close();
-
-  }
+  } 
 
   res.send("Dados populados com sucesso!")
 
@@ -154,8 +151,8 @@ app.get("/products", (req, res) => {
   });
 
   // Fechando o banco de dados após a consulta
-  db.close();
 });
+
 
 
 app.listen(PORT, () => {
