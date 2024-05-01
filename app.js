@@ -1,32 +1,48 @@
 const express = require("express");
+const cors = require("cors");
+const app = express();
 const bodyParser = require("body-parser");
 const sqlite3 = require("sqlite3").verbose();
-const cors = require("cors");
-
-const app = express();
 const PORT = process.env.PORT || 3001;
-const  products = require('./products') 
+
+const products  = require('./products')
+const questions = require( './questions');
+
+
 app.use(bodyParser.json());
 app.use(cors());
 
-const db = new sqlite3.Database("./database2.db");
+const db = new sqlite3.Database("./database.db");
 
-app.get("/allProducts", (req, res) => {
-  const sql = `SELECT * FROM products`;
-  db.all(sql, [], (err, rows) => {
+
+app.get('/quiz', (req, res) => {
+  db.all("SELECT * FROM quiz ORDER BY RANDOM()", (err, rows) => {
     if (err) {
-      return res.status(500).json({ error: err.message });
+      console.error("Error getting questions:", err.message);
+      res.status(500).json({ error: 'Internal Server Error' });
+      return;
     }
-    res.status(200).json(rows);
+    res.json(rows);
   });
 });
 
 app.get("/populate", (req, res) => {
-  
-  // Dropa a tabela se ela já existir
-  db.serialize(() => {
-    db.run("DROP TABLE IF EXISTS products");
-  });
+  try {
+    createProducts(products, res)
+    createQuiz(questions, res)
+  } catch (error) {
+    console.log(error.message);
+  } finally {
+    db.close();
+
+  }
+
+  res.send("Dados populados com sucesso!")
+
+});
+
+function createProducts(products, res) {
+  db.serialize(() => db.run("DROP TABLE IF EXISTS products"));
 
   // Cria a tabela de produtos
   db.serialize(() => {
@@ -48,50 +64,78 @@ app.get("/populate", (req, res) => {
         product.rating
       );
     });
+
     stmt.finalize();
 
-    res.send("Dados populados com sucesso na tabela.");
   });
-});
+}
 
-app.get("/items", (req, res) => {
-  const page = parseInt(req.query.page);
-  const limit = 5;
-  const offset = (page - 1) * limit;
 
-  const sql = "SELECT * FROM products LIMIT ? OFFSET ?";
-  db.all(sql, [limit, offset], (err, rows) => {
-    if (err) {
-      console.error("Error retrieving items:", err);
-      res.status(500).json({ error: "Error retrieving items" });
-    } else {
-      res.json(rows);
-    }
+function createQuiz(questions, res) {
+  db.serialize(() => {
+    db.run("DROP TABLE IF EXISTS quiz", (err) => {
+      if (err) {
+        console.error("Error dropping quiz table:", err.message);
+        return;
+      }
+    });
+  
+    db.run(
+      `
+      CREATE TABLE quiz (
+        id INTEGER PRIMARY KEY,
+        question TEXT,
+        answer BOOLEAN
+      )
+      `,
+      (err) => {
+        if (err) {
+          console.error("Error creating quiz table:", err.message);
+          return;
+        }
+        
+        const sql = `INSERT INTO quiz (question, answer) VALUES (?, ?)`;
+        questions.forEach((question) => {
+          db.run(
+            sql,
+            [question.question, question.answer],
+            function (err) {
+              if (err) {
+                console.error("Error inserting question:", err.message);
+                return;
+              }
+            }
+          );
+        });
+
+      }
+    );
   });
-});
-
+}
 
 app.get("/products", (req, res) => {
   const page = parseInt(req.query.page) || 1; // Página padrão é 1
-  const limit = 5;
+  const limit = 10;
   const offset = (page - 1) * limit;
+
+  const {category, priceMin, priceMax, rating} = req.query
 
   let sql = "SELECT * FROM products WHERE 1=1";
   const params = [];
 
   // Aplicando filtros
-  if (req.query.category) {
+  if (category) {
     sql += " AND category = ?";
-    params.push(req.query.category);
+    params.push(category);
   }
-  if (req.query.price_min && req.query.price_max) {
+  if (priceMin && priceMax) {
     sql += " AND price BETWEEN ? AND ?";
-    params.push(req.query.price_min);
-    params.push(req.query.price_max);
+    params.push(priceMin);
+    params.push(priceMax);
   }
-  if (req.query.min_rating) {
+  if (rating) {
     sql += " AND rating >= ?";
-    params.push(req.query.min_rating);
+    params.push(rating);
   }
 
   // Aplicando paginação
@@ -100,7 +144,6 @@ app.get("/products", (req, res) => {
   params.push(offset);
 
   // Executando a consulta
-  const db = new sqlite3.Database('database2.db');
   db.all(sql, params, (err, rows) => {
     if (err) {
       console.error("Error retrieving items:", err);
