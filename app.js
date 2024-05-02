@@ -150,7 +150,6 @@ app.get("/products", (req, res) => {
     }
   });
 
-  // Fechando o banco de dados após a consulta
 });
 
 
