@@ -16,6 +16,7 @@ const db = new sqlite3.Database("./database.db");
 app.get('/', (req, res) => {
   res.send("elements-api")
 });
+
 app.get('/quiz', (req, res) => {
   db.all("SELECT * FROM quiz ORDER BY RANDOM()", (err, rows) => {
     if (err) {
@@ -114,7 +115,7 @@ function createQuiz(questions, res) {
 
 app.get("/products", (req, res) => {
   const page = parseInt(req.query.page) || 1; // Página padrão é 1
-  const limit = 10;
+  const limit = 12;
   const offset = (page - 1) * limit;
 
   const {category, priceMin, priceMax, rating} = req.query
